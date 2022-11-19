@@ -2,7 +2,6 @@ package synflood
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/didof/swissknife/internal/logger"
@@ -29,13 +28,29 @@ func Run(ctx context.Context, target string, opts SynFloodOptions) {
 		zap.String("buildData", ver.BuildDate),
 	)
 
+	var cancel context.CancelFunc
+	if opts.FloodDurationMilliseconds != -1 {
+		ctx, cancel = context.WithTimeout(ctx, time.Millisecond*time.Duration(opts.FloodDurationMilliseconds))
+	}
+
+	go func() {
+		if err := do(ctx, opts); err != nil {
+			cancel()
+			log.Fatal("an error occured on flooding process", zap.String("error", err.Error()))
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
+			cancel()
 			return
 		default:
-			time.Sleep(time.Second)
-			fmt.Println("tick")
+			continue
 		}
 	}
+}
+
+func do(ctx context.Context, opts SynFloodOptions) error {
+	return nil
 }

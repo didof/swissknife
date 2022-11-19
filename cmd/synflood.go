@@ -15,7 +15,8 @@ var (
 
 func init() {
 	syncFloodCmd.Flags().IntVarP(&opts.Port, "port", "p", 443, "reachable port of the target") // TODO use icmp to scan all ports of host
-	syncFloodCmd.Flags().IntVar(&opts.PayloadLength, "payloadLength", 1400, "payload length in bytes for each SYN packet")
+	syncFloodCmd.Flags().IntVarP(&opts.PayloadLength, "payload-length", "n", 1400, "payload length in bytes for each SYN packet")
+	syncFloodCmd.Flags().IntVarP(&opts.FloodDurationMilliseconds, "flood-duration-md", "d", -1, "duration in milliseconds of the attack. Provide -1 for no limit")
 	syncFloodCmd.PersistentFlags().BoolVarP(&opts.Verbose, "verbose", "v", false, "verbose output of the logging library (default false)")
 }
 

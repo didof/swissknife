@@ -1,14 +1,15 @@
 package synflood
 
-type Options struct {
+type options struct {
 	Verbose bool
 }
 
 type SynFloodOptions struct {
-	Port          int
-	PayloadLength int
+	Port                      int
+	PayloadLength             int
+	FloodDurationMilliseconds int
 
-	Options
+	options
 }
 
 var synFloodOptions = &SynFloodOptions{}

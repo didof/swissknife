@@ -32,6 +32,8 @@ func (sl *signalsListener) Listen(ctx context.Context) context.Context {
 	signal.Notify(doneCh, sl.signals...)
 
 	go func() {
+		defer close(doneCh)
+
 		<-doneCh
 		log.Println("exiting...")
 		cancel()
