@@ -51,3 +51,36 @@ func newIpsSpoofer(n int) *ipSlice {
 	ips.fill(n)
 	return &ips
 }
+
+type hardwareAddrSlice []net.HardwareAddr
+
+func (s hardwareAddrSlice) fill(n int) {
+	slice := make(hardwareAddrSlice, n)
+
+	for i := 0; i < n; i++ {
+		buf := make([]byte, 6)
+		_, err := rand.Read(buf)
+		if err != nil {
+			panic(err)
+		}
+		slice = append(slice, buf)
+	}
+
+	copy(s, slice)
+}
+
+func (s hardwareAddrSlice) rand() net.HardwareAddr {
+	return s[rand.Intn(len(s))]
+}
+
+func newMacAddrsSpoofer(n int) *hardwareAddrSlice {
+	hardwareAddrs := make(hardwareAddrSlice, n)
+	hardwareAddrs.fill(n)
+	return &hardwareAddrs
+}
+
+func newRandomPayload(n int) []byte {
+	buf := make([]byte, n)
+	rand.Read(buf)
+	return buf
+}

