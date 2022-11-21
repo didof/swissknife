@@ -12,8 +12,7 @@ import (
 )
 
 var (
-	cfgFileName = ".swissknife"
-	ver         = version.Get()
+	ver = version.Get()
 )
 
 var cfgFile string
@@ -27,34 +26,32 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", fmt.Sprintf("config file (default is $HOME/%s)", cfgFileName))
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.swissknife)")
 
 	rootCmd.PersistentFlags().StringP("author", "a", "didof", "author name for copyright attribution")
 	viper.BindPFlag("author", rootCmd.PersistentFlags().Lookup("author"))
 	viper.SetDefault("author", "didof <didonato.fr>")
-
-	rootCmd.AddCommand(GetSyncFloodCommand())
 }
 
 func initConfig() {
-	func() {
-		if cfgFile != "" {
-			viper.SetConfigFile(cfgFile)
-			return
-		}
-
+	if cfgFile != "" {
+		viper.SetConfigFile(cfgFile)
+	} else {
 		home, err := homedir.Dir()
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
+		// Search config in home directory with name ".WirePenguin" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(cfgFileName)
-	}()
+		viper.SetConfigName(".WirePenguin")
+	}
+
+	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
-		// fmt.Printf("Can't read config file ($HOME/%s).\n", cfgFileName)
+		// fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 }
 
